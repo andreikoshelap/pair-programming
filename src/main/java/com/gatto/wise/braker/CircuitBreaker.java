@@ -13,6 +13,7 @@ public class CircuitBreaker {
     private State state;
     private int consecutiveFailures;
     private Instant openedAt;
+    private long generation;
 
     public CircuitBreaker(int failureThreshold, Duration openStateDuration) {
         this(failureThreshold, openStateDuration, Clock.systemUTC());
@@ -32,52 +33,58 @@ public class CircuitBreaker {
         this.state = State.CLOSED;
     }
 
-    public synchronized <T> T execute(ThrowingSupplier<T> supplier) throws Exception {
-        Objects.requireNonNull(supplier);
-
-        return switch (state) {
-            case CLOSED -> executeClosed(supplier);
-            case OPEN -> executeOpen(supplier);
-            case HALF_OPEN -> executeHalfOpen(supplier);
-        };
-    }
-
     public synchronized String currentState() {
         return state.name();
     }
 
-    private <T> T executeClosed(ThrowingSupplier<T> supplier) throws Exception {
+    public <T> T call(ThrowingSupplier<T> supplier) throws Exception {
+        Objects.requireNonNull(supplier);
+
+        long callGeneration = beforeCall();
         try {
             T result = supplier.get();
-            moveToClosed();
+            onSuccess(callGeneration);
             return result;
-        } catch (Exception exception) {
-            consecutiveFailures++;
-            if (consecutiveFailures >= failureThreshold) {
-                moveToOpen();
-            }
-            throw exception;
+        } catch (Exception | Error e) {
+            onFailure(callGeneration);
+            throw e;
         }
     }
 
-    private <T> T executeOpen(ThrowingSupplier<T> supplier) throws Exception {
-        Instant reopenAt = openedAt.plus(openStateDuration);
-        if (clock.instant().isBefore(reopenAt)) {
+    private synchronized long beforeCall() {
+        if (state == State.HALF_OPEN) {
             throw new CircuitBreakerOpenException();
         }
-
-        state = State.HALF_OPEN;
-        return executeHalfOpen(supplier);
+        if (state == State.OPEN) {
+            if (clock.instant().isBefore(openedAt.plus(openStateDuration))) {
+                throw new CircuitBreakerOpenException();
+            }
+            state = State.HALF_OPEN;
+            generation++;
+        }
+        return generation;
     }
 
-    private <T> T executeHalfOpen(ThrowingSupplier<T> supplier) throws Exception {
-        try {
-            T result = supplier.get();
+    private synchronized void onSuccess(long callGeneration) {
+        // Ignore results from calls admitted before the last state transition.
+        if (callGeneration != generation) {
+            return;
+        }
+        if (state == State.HALF_OPEN) {
             moveToClosed();
-            return result;
-        } catch (Exception exception) {
+        } else if (state == State.CLOSED) {
+            consecutiveFailures = 0;
+        }
+    }
+
+    private synchronized void onFailure(long callGeneration) {
+        if (callGeneration != generation) {
+            return;
+        }
+        if (state == State.HALF_OPEN) {
             moveToOpen();
-            throw exception;
+        } else if (state == State.CLOSED && ++consecutiveFailures >= failureThreshold) {
+            moveToOpen();
         }
     }
 
@@ -85,12 +92,14 @@ public class CircuitBreaker {
         consecutiveFailures = 0;
         openedAt = null;
         state = State.CLOSED;
+        generation++;
     }
 
     private void moveToOpen() {
         consecutiveFailures = 0;
         openedAt = clock.instant();
         state = State.OPEN;
+        generation++;
     }
 
     private enum State {
