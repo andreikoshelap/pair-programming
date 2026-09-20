@@ -11,7 +11,7 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 class CircuitBreakerExampleTest {
 
     @Test
-    void demonstratesFailuresRejectionAndRecovery(CapturedOutput output) throws InterruptedException {
+    void demonstratesFailuresRejectionAndRecovery(CapturedOutput output) {
         CircuitBreakerExample.main(new String[0]);
 
         assertThat(output.getOut().lines().filter(line -> !line.isBlank()).toList())
@@ -24,7 +24,7 @@ class CircuitBreakerExampleTest {
                         "State after request: OPEN",
                         "Request rejected: circuit breaker is open",
                         "State after request: OPEN",
-                        "Waiting for the retry timeout...",
+                        "Advancing the clock by 2 seconds...",
                         "Service call #3, state: HALF_OPEN",
                         "Rate: 1 EUR = 1.10 USD (demo rate)",
                         "State after request: CLOSED",

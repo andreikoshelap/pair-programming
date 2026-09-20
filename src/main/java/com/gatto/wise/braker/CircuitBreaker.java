@@ -19,7 +19,7 @@ public class CircuitBreaker {
         this(failureThreshold, openStateDuration, Clock.systemUTC());
     }
 
-    CircuitBreaker(int failureThreshold, Duration openStateDuration, Clock clock) {
+    public CircuitBreaker(int failureThreshold, Duration openStateDuration, Clock clock) {
         if (failureThreshold < 1) {
             throw new IllegalArgumentException("failureThreshold must be positive");
         }
@@ -45,9 +45,9 @@ public class CircuitBreaker {
             T result = supplier.get();
             onSuccess(callGeneration);
             return result;
-        } catch (Exception | Error e) {
+        } catch (Throwable t) {
             onFailure(callGeneration);
-            throw e;
+            throw t;
         }
     }
 

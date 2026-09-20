@@ -5,21 +5,23 @@ import com.gatto.wise.braker.CircuitBreakerOpenException;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 
 public class CircuitBreakerExample {
+    private final MutableClock clock = new MutableClock(Instant.parse("2026-09-20T12:00:00Z"));
     // Reuse one breaker across calls to the same external service.
-    private final CircuitBreaker breaker = new CircuitBreaker(2, Duration.ofSeconds(2));
+    private final CircuitBreaker breaker = new CircuitBreaker(2, Duration.ofSeconds(2), clock);
     private int serviceCalls;
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) {
         CircuitBreakerExample example = new CircuitBreakerExample();
 
         example.requestRate(); // First failure: CLOSED.
         example.requestRate(); // Second failure: OPEN.
         example.requestRate(); // Rejected without calling the service.
 
-        System.out.println("Waiting for the retry timeout...");
-        Thread.sleep(2100); // Only to demonstrate the timeout with real clocks.
+        System.out.println("Advancing the clock by 2 seconds...");
+        example.clock.advance(Duration.ofSeconds(2));
 
         example.requestRate(); // Successful HALF_OPEN probe: CLOSED.
         example.requestRate(); // Normal call again.
