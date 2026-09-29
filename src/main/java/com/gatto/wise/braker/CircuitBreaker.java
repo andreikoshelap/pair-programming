@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 public class CircuitBreaker {
     private final int failureThreshold;
@@ -37,7 +38,7 @@ public class CircuitBreaker {
         return state.name();
     }
 
-    public <T> T call(ThrowingSupplier<T> supplier) throws Exception {
+    public <T> T call(Supplier<T> supplier) {
         Objects.requireNonNull(supplier);
 
         long callGeneration = beforeCall();

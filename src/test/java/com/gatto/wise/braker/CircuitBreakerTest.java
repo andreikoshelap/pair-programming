@@ -19,7 +19,7 @@ class CircuitBreakerTest {
     private final MutableClock clock = new MutableClock(Instant.parse("2026-09-19T12:00:00Z"));
 
     @Test
-    void startsClosedAndReturnsServiceResponse() throws Exception {
+    void startsClosedAndReturnsServiceResponse() {
         CircuitBreaker breaker = new CircuitBreaker(2, Duration.ofSeconds(30), clock);
 
         String response = breaker.call(() -> "ok");
@@ -53,7 +53,7 @@ class CircuitBreakerTest {
     }
 
     @Test
-    void closesAgainAfterSuccessfulTrialRequest() throws Exception {
+    void closesAgainAfterSuccessfulTrialRequest() {
         CircuitBreaker breaker = new CircuitBreaker(1, Duration.ofSeconds(30), clock);
         assertThatThrownBy(() -> breaker.call(this::externalServiceFailure))
                 .isInstanceOf(IllegalStateException.class);
@@ -80,7 +80,7 @@ class CircuitBreakerTest {
     }
 
     @Test
-    void successResetsConsecutiveFailures() throws Exception {
+    void successResetsConsecutiveFailures() {
         CircuitBreaker breaker = new CircuitBreaker(2, Duration.ofSeconds(30), clock);
         assertThatThrownBy(() -> breaker.call(this::externalServiceFailure))
                 .isInstanceOf(IllegalStateException.class);
@@ -101,7 +101,7 @@ class CircuitBreakerTest {
             try {
                 var first = executor.submit(() -> breaker.call(() -> {
                     started.countDown();
-                    release.await();
+                    await(release);
                     return "first";
                 }));
                 assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
@@ -131,7 +131,7 @@ class CircuitBreakerTest {
                     try {
                         return breaker.call(() -> {
                             oldStarted.countDown();
-                            releaseOld.await();
+                            await(releaseOld);
                             return oldCallFails ? externalServiceFailure() : "old";
                         });
                     } catch (IllegalStateException exception) {
@@ -145,7 +145,7 @@ class CircuitBreakerTest {
 
                 var probe = executor.submit(() -> breaker.call(() -> {
                     probeStarted.countDown();
-                    releaseProbe.await();
+                    await(releaseProbe);
                     return "recovered";
                 }));
                 assertThat(probeStarted.await(5, TimeUnit.SECONDS)).isTrue();
@@ -173,7 +173,7 @@ class CircuitBreakerTest {
     }
 
     @Test
-    void errorDoesNotLeaveProbeStuckInHalfOpen() throws Exception {
+    void errorDoesNotLeaveProbeStuckInHalfOpen() {
         CircuitBreaker breaker = new CircuitBreaker(1, Duration.ofSeconds(30), clock);
         assertThatThrownBy(() -> breaker.call(this::externalServiceFailure))
                 .isInstanceOf(IllegalStateException.class);
@@ -199,6 +199,15 @@ class CircuitBreakerTest {
         assertThatThrownBy(() -> breaker.call(() -> { throw failure; }))
                 .isSameAs(failure);
         assertThat(breaker.currentState()).isEqualTo("OPEN");
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Interrupted while waiting for test coordination", exception);
+        }
     }
 
     private String externalServiceFailure() {

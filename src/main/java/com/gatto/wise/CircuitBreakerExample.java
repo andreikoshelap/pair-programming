@@ -3,7 +3,6 @@ package com.gatto.wise;
 import com.gatto.wise.braker.CircuitBreaker;
 import com.gatto.wise.braker.CircuitBreakerOpenException;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 
@@ -40,13 +39,13 @@ public class CircuitBreakerExample {
         System.out.println();
     }
 
-    private String fetchExchangeRate() throws IOException {
+    private String fetchExchangeRate() {
         serviceCalls++;
         System.out.println("Service call #" + serviceCalls + ", state: " + breaker.currentState());
 
         // Simulate an external service failing twice, then recovering.
         if (serviceCalls <= 2) {
-            throw new IOException("Exchange rate service is unavailable");
+            throw new IllegalStateException("Exchange rate service is unavailable");
         }
         return "1 EUR = 1.10 USD (demo rate)";
     }
